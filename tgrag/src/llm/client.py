@@ -6,7 +6,6 @@ import logging
 from typing import Optional, Dict, Any, List
 import uuid
 
-import aioboto3
 from openai import AsyncOpenAI, AsyncAzureOpenAI, RateLimitError
 
 logger = logging.getLogger("temporal-graphrag.llm")
@@ -66,6 +65,7 @@ class LLMClientManager:
     def get_bedrock_session(self) -> Any:
         """Get or create Amazon Bedrock session."""
         if self._bedrock_session is None:
+            import aioboto3
             self._bedrock_session = aioboto3.Session()
         return self._bedrock_session
     

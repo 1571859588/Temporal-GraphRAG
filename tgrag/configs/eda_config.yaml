@@ -1,0 +1,62 @@
+# TG-RAG EDA Benchmark Configuration
+# Tailored for LLM4EDA version-evolving document scenario
+#
+# Provider/model are set via environment variables in run.sh:
+#   OPENAI_API_KEY, OPENAI_BASE_URL (for both LLM and Embedding)
+
+# ===================
+# BUILDING GRAPH CONFIG
+# ===================
+building:
+  corpus_path: null  # Documents injected programmatically via run_eda_benchmark.py
+  working_dir: "./tgrag_eda_cache"
+
+  baseline: "temporalrag"
+  provider: "openai"              # Uses OpenAI-compatible API (vLLM / Ollama / etc.)
+  model: "Qwen3-30B-A3B-Instruct-2507"  # Overridden by TGRAG_MODEL env if set
+
+  embedding_provider: "openai"    # Embedding via OpenAI-compatible /v1/embeddings
+
+  # Chunking — smaller for short EDA docs (~50 lines per version)
+  chunk_size: 600
+  chunk_overlap: 50
+
+  enable_seasonal_matching: false
+  enable_community_summary: true
+
+  enable_incremental: false
+  preserve_communities: false
+  force_rebuild: false
+
+# ===================
+# QUERYING GRAPH CONFIG
+# ===================
+querying:
+  corpus_path: null
+  working_dir: "./tgrag_eda_cache"
+  provider: "openai"
+  model: "Qwen3-30B-A3B-Instruct-2507"
+
+  mode: "local"   # local = temporal-aware entity retrieval (core TG-RAG)
+
+  baseline: "temporalrag"
+  evaluation_mode: "local"
+  num_questions: null
+  output_file: null
+
+  # Retrieval parameters
+  top_k: 20
+  truncated_context_length: 4000
+  enable_entity_retrieval: false
+  enable_subgraph: true
+  enable_mixed_relationship: false
+  seed_node_method: "relations"
+
+  # Token limits (reduced for shorter EDA docs)
+  local_max_token_for_text_unit: 2000
+  local_max_token_for_local_context: 3000
+  local_max_token_for_community_report: 1000
+  global_max_token_for_community_report: 8000
+  naive_max_token_for_text_unit: 6000
+
+  use_enhanced_retrieval: false

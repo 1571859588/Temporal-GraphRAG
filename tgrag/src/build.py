@@ -51,12 +51,23 @@ def create_llm_function(provider: str, model: str, api_key: Optional[str] = None
 
 
 def create_embedding_function(embedding_provider: str, api_key: Optional[str] = None, base_url: Optional[str] = None):
-    """Create embedding function based on embedding provider."""
-    # Get base_url from env if not provided and provider supports it
+    """Create embedding function based on embedding provider.
+    
+    Supports separate embedding endpoint via OPENAI_EMBEDDING_BASE_URL env var,
+    and configurable embedding dimension via OPENAI_EMBEDDING_DIM env var.
+    """
+    # Support separate embedding base URL (e.g., vLLM embedding on port 8029)
     if not base_url and embedding_provider in ("openai", "azure", "gemini"):
-        base_url = os.getenv('OPENAI_BASE_URL')
+        base_url = os.getenv('OPENAI_EMBEDDING_BASE_URL', os.getenv('OPENAI_BASE_URL'))
     elif not base_url and embedding_provider == "bedrock":
         base_url = os.getenv('BEDROCK_BASE_URL')
+    
+    # Support separate embedding API key
+    if not api_key and embedding_provider in ("openai",):
+        api_key = os.getenv('OPENAI_EMBEDDING_API_KEY', os.getenv('OPENAI_API_KEY'))
+    
+    # Configurable embedding dimension (default 1536 for OpenAI, but varies for other models)
+    embedding_dim = int(os.getenv('OPENAI_EMBEDDING_DIM', '1536'))
     
     async def embedding_wrapper(texts: List[str]) -> np.ndarray:
         kwargs = {}
@@ -75,26 +86,26 @@ def create_embedding_function(embedding_provider: str, api_key: Optional[str] = 
             # Default to OpenAI
             return await openai_embedding(texts, **kwargs)
     
-    # Return appropriate EmbeddingFunc based on embedding provider
+    # Return appropriate EmbeddingFunc
     if embedding_provider in ("openai", "azure"):
         return EmbeddingFunc(
-            embedding_dim=1536,
+            embedding_dim=embedding_dim,
             func=embedding_wrapper,
             max_token_size=8192
         )
     elif embedding_provider == "bedrock":
         return EmbeddingFunc(
-            embedding_dim=1024,  # Typical for Bedrock embeddings
+            embedding_dim=1024,
             func=embedding_wrapper,
             max_token_size=8192
         )
     else:
-        # Default to OpenAI (1536-dim)
         return EmbeddingFunc(
-            embedding_dim=1536,
+            embedding_dim=embedding_dim,
             func=embedding_wrapper,
             max_token_size=8192
         )
+
 
 
 def create_temporal_graphrag_from_config(

@@ -31,22 +31,40 @@ async def openai_embedding(
     api_key: Optional[str] = None,
     base_url: Optional[str] = None
 ) -> np.ndarray:
-    """Generate embeddings using OpenAI.
+    """Generate embeddings using OpenAI-compatible API.
+    
+    Supports separate endpoint for embedding via OPENAI_EMBEDDING_BASE_URL env var,
+    and configurable model name via OPENAI_EMBEDDING_MODEL env var.
     
     Args:
         texts: List of texts to embed
         api_key: OpenAI API key (optional, defaults to env var)
-        base_url: Custom base URL (optional, defaults to env var or OpenAI API)
+        base_url: Custom base URL (optional, falls back to OPENAI_EMBEDDING_BASE_URL
+                  then OPENAI_BASE_URL, then default OpenAI API)
         
     Returns:
         NumPy array of embeddings
     """
-    client_manager = get_client_manager()
-    openai_client = client_manager.get_openai_client(api_key=api_key, base_url=base_url)
+    # Support separate embedding endpoint (e.g., vLLM on different port)
+    if not base_url:
+        base_url = os.getenv('OPENAI_EMBEDDING_BASE_URL', os.getenv('OPENAI_BASE_URL'))
+    if not api_key:
+        api_key = os.getenv('OPENAI_EMBEDDING_API_KEY', os.getenv('OPENAI_API_KEY'))
     
+    # Support configurable model name (e.g., Qwen3-Embedding-8B via vLLM)
+    embedding_model = os.getenv('OPENAI_EMBEDDING_MODEL', 'text-embedding-3-small')
+    
+    client_manager = get_client_manager()
+    # openai_client = client_manager.get_openai_client(api_key=api_key, base_url=base_url)
+    
+    # 手动创建 AsyncOpenAI 客户端，确保传入正确的 base_url 和 api_key
+    from openai import AsyncOpenAI
+    openai_client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+
     response = await openai_client.embeddings.create(
-        model="text-embedding-3-small", input=texts, encoding_format="float"
+        model=embedding_model, input=texts, encoding_format="float"
     )
+    print(f"DEBUG Response: {response}")
     return np.array([dp.embedding for dp in response.data])
 
 
