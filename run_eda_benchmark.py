@@ -36,10 +36,23 @@ if TGRAG_ROOT not in sys.path:
     sys.path.insert(0, TGRAG_ROOT)
 
 # Also add our project's src/ for evaluation metrics
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_SRC = os.path.abspath(os.path.join(SCRIPT_DIR, "../../src"))
+if PROJECT_SRC not in sys.path:
+    sys.path.insert(0, PROJECT_SRC)
+try:
+    from config.prompts import get_baseline_generation_append
+except ImportError:
+    pass
+
+BASELINES_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
+if BASELINES_DIR not in sys.path:
+    sys.path.insert(0, BASELINES_DIR) # Corrected from SRC_DIR to BASELINES_DIR
+
 PROJECT_ROOT = os.path.dirname(os.path.dirname(TGRAG_ROOT))  # codes/
 SRC_DIR = os.path.join(PROJECT_ROOT, "src")
 if SRC_DIR not in sys.path:
-    sys.path.insert(0, SRC_DIR)
+    sys.sys.path.insert(0, SRC_DIR)
 
 
 def parse_args():
@@ -59,8 +72,11 @@ def parse_args():
                         help="TG-RAG 图缓存目录 (覆盖配置文件中的 working_dir)")
     parser.add_argument("--query-mode", default="local", choices=["local", "global", "naive"],
                         help="TG-RAG 查询模式 (local/global/naive)")
+    parser.add_argument("--domain", default="tcl",
+                        help="Target script domain/language for code generation (e.g., tcl)")
     parser.add_argument("--rebuild", action="store_true",
                         help="强制重新构建图 (忽略缓存)")
+    parser.add_argument("--query-only", action="store_true", help="Skip index building, only query existing DB.")
 
     # Output
     parser.add_argument("--output-dir", default=os.path.join(PROJECT_ROOT, "runs/tgrag"),
@@ -119,10 +135,10 @@ def main():
     # ------------------------------------------------------------------
     log("\n[2] 加载 Ground Truth...")
     with open(os.path.join(args.gt_dir, "qa_pairs.json"), "r", encoding="utf-8") as f:
-        gt_qa = json.load(f)
+        gt_qa_data = json.load(f) # Renamed to gt_qa_data
     with open(os.path.join(args.gt_dir, "evolution_rationale.json"), "r", encoding="utf-8") as f:
         gt_rationale = json.load(f)
-    log(f"  QA pairs: {len(gt_qa['qa_pairs'])}")
+    log(f"  QA pairs: {len(gt_qa_data.get('qa_pairs', []))}") # Updated to use gt_qa_data
     log(f"  Rationales: {len(gt_rationale['rationales'])}")
 
     # ------------------------------------------------------------------
@@ -147,8 +163,12 @@ def main():
 
     # Check if graph already built (skip rebuild unless --rebuild)
     graph_marker = os.path.join(graph_rag.working_dir, "graph_chunk_entity_relation.graphml")
-    if os.path.exists(graph_marker) and not args.rebuild:
+    if os.path.exists(graph_marker) and not args.rebuild and not args.query_only: # Added args.query_only
         log("  -> 检测到已有图缓存, 跳过构建 (使用 --rebuild 强制重建)")
+    elif args.query_only: # Added query_only logic
+        log("  -> --query-only 模式, 跳过图构建.")
+        if not os.path.exists(graph_marker):
+            log("  -> 警告: 在 --query-only 模式下未找到图缓存. 请确保图已预先构建.")
     else:
         log("\n[3.1] 构建时序知识图谱...")
         log("  -> 插入 V1 文档...")
@@ -183,19 +203,25 @@ def main():
     # ------------------------------------------------------------------
     # 5. Run QA queries
     # ------------------------------------------------------------------
-    log(f"\n[5] 运行 QA 查询 ({len(gt_qa['qa_pairs'])} 个问题)...")
+    log(f"\n[5] 运行 QA 查询 ({len(gt_qa_data.get('qa_pairs', []))} 个问题)...")
 
     qa_results = []
+    appender = get_baseline_generation_append(args.domain) if 'get_baseline_generation_append' in globals() else ""
 
-    for idx, qa in enumerate(gt_qa["qa_pairs"]):
-        query = qa["query"]
-        expected = qa["expected_answer"]
+    for idx, qa in enumerate(gt_qa_data.get("qa_pairs", [])):
+        base_query = qa.get("query", "")
+        expected_rationale = qa.get("expected_rationale", "")
+        expected_command = qa.get("expected_command", "")
         deprecated = qa.get("deprecated_terms_in_context", [])
+        query_id = qa.get("query_id", f"query_{idx}")
+        
+        # Actionable QA prompt injection
+        formatted_query = base_query + appender
 
-        log(f"\n  [Q{idx+1}]: {query}")
+        log(f"\n  [Q{idx+1}]: {base_query}")
 
         try:
-            result = graph_rag_query.query(query, param=query_param)
+            result = graph_rag_query.query(formatted_query, param=query_param)
 
             # local mode returns (response, retrieval_detail)
             if isinstance(result, tuple):
@@ -213,8 +239,10 @@ def main():
             retrieval_detail = None
 
         qa_results.append({
-            "query": query,
-            "expected_answer": expected,
+            "query_id": query_id,
+            "query": base_query,
+            "expected_rationale": expected_rationale,
+            "expected_command": expected_command,
             "response": response_text.strip(),
             "deprecated_terms": deprecated,
             "retrieval_detail": str(retrieval_detail)[:500] if retrieval_detail else None,
@@ -228,8 +256,10 @@ def main():
         "Summarize all changes and evolution between version 1.0 and version 2.0 "
         "of the Clock Timing Constraints Guide. List each change as a bullet point."
     )
+    # Ensure we also force the structural representation of domain code in ERS response just in case.
+    appender = get_baseline_generation_append(args.domain) if 'get_baseline_generation_append' in globals() else ""
     try:
-        evo_result = graph_rag_query.query(evo_query, param=query_param)
+        evo_result = graph_rag_query.query(evo_query + appender, param=query_param)
         if isinstance(evo_result, tuple):
             evo_rationale = str(evo_result[0])
         else:
