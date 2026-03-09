@@ -13,7 +13,7 @@ building:
 
   baseline: "temporalrag"
   provider: "openai"              # Uses OpenAI-compatible API (vLLM / Ollama / etc.)
-  model: "Qwen3-30B-A3B-Instruct-2507"  # Overridden by TGRAG_MODEL env if set
+  model: "kimi-k2-0905"  # Overridden by TGRAG_MODEL env if set
 
   embedding_provider: "openai"    # Embedding via OpenAI-compatible /v1/embeddings
 
@@ -35,7 +35,7 @@ querying:
   corpus_path: null
   working_dir: "./tgrag_eda_cache"
   provider: "openai"
-  model: "Qwen3-30B-A3B-Instruct-2507"
+  model: "kimi-k2-0905"
 
   mode: "local"   # local = temporal-aware entity retrieval (core TG-RAG)
 
