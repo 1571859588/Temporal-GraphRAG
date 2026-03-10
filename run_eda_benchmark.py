@@ -12,8 +12,7 @@ Usage:
   export OPENAI_API_KEY="sk-xxx"
 
   python run_eda_benchmark.py \
-    --v1-text ../../benchmark/test_markdown/v1.md \
-    --v2-text ../../benchmark/test_markdown/v2.md \
+    --versions ../../benchmark/test_markdown/v1.md ../../benchmark/test_markdown/v2.md ../../benchmark/test_markdown/v3.md \
     --gt-dir ../../benchmark/gts \
     --config tgrag/configs/eda_config.yaml \
     --query-mode local \
@@ -61,8 +60,7 @@ def parse_args():
     )
 
     # Input files
-    parser.add_argument("--v1-text", required=True, help="V1 版本 Markdown/文本路径")
-    parser.add_argument("--v2-text", required=True, help="V2 版本 Markdown/文本路径")
+    parser.add_argument("--versions", nargs="+", required=True, help="多版本 Markdown/文本路径")
     parser.add_argument("--gt-dir", required=True, help="Ground Truth 目录路径 (含 qa_pairs.json 等)")
 
     # TG-RAG config
@@ -123,12 +121,12 @@ def main():
     # 1. Load input texts
     # ------------------------------------------------------------------
     log("\n[1] 加载输入文本...")
-    with open(args.v1_text, "r", encoding="utf-8") as f:
-        v1_text = f.read()
-    with open(args.v2_text, "r", encoding="utf-8") as f:
-        v2_text = f.read()
-    log(f"  V1: {len(v1_text)} chars ({args.v1_text})")
-    log(f"  V2: {len(v2_text)} chars ({args.v2_text})")
+    version_texts = []
+    for path in args.versions:
+        with open(path, "r", encoding="utf-8") as f:
+            t = f.read()
+            version_texts.append(t)
+            log(f"  Loaded {path}: {len(t)} chars")
 
     # ------------------------------------------------------------------
     # 2. Load Ground Truth
@@ -171,11 +169,10 @@ def main():
             log("  -> 警告: 在 --query-only 模式下未找到图缓存. 请确保图已预先构建.")
     else:
         log("\n[3.1] 构建时序知识图谱...")
-        log("  -> 插入 V1 文档...")
-        documents = [
-            {"title": "EDA Clock Timing Constraints Guide v1.0", "doc": v1_text},
-            {"title": "EDA Clock Timing Constraints Guide v2.0", "doc": v2_text},
-        ]
+        log("  -> 插入文档序列...")
+        documents = []
+        for i, text in enumerate(version_texts):
+            documents.append({"title": f"EDA Clock Timing Constraints Guide v{i+1}.0", "doc": text})
         graph_rag.insert(documents)
         log("  -> 图构建完成!")
 
