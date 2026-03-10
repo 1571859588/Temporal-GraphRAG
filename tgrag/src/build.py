@@ -202,18 +202,18 @@ def create_temporal_graphrag_from_config(
     if embedding_provider == "gemini":
         embedding_provider = "openai"
     
-    embedding_base_url = base_url
+    embedding_base_url = os.getenv('OPENAI_EMBEDDING_BASE_URL', base_url)
     
     if embedding_provider == "openai":
         # Always use OpenAI API key for OpenAI embeddings
-        embedding_api_key = get_api_key_for_provider("openai")
+        embedding_api_key = os.getenv('OPENAI_EMBEDDING_API_KEY', get_api_key_for_provider("openai"))
         if not embedding_api_key:
             raise ValueError(
                 "OpenAI API key not found for embeddings. "
-                "Please set OPENAI_API_KEY environment variable."
+                "Please set OPENAI_EMBEDDING_API_KEY or OPENAI_API_KEY environment variable."
             )
         if not embedding_base_url:
-            embedding_base_url = os.getenv('OPENAI_BASE_URL')
+            embedding_base_url = os.getenv('OPENAI_EMBEDDING_BASE_URL', os.getenv('OPENAI_BASE_URL'))
     elif embedding_provider == "azure":
         # Always use Azure API key for Azure embeddings
         embedding_api_key = get_api_key_for_provider("azure")
