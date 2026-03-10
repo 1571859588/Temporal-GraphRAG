@@ -242,7 +242,7 @@ def main():
             "expected_command": expected_command,
             "response": response_text.strip(),
             "deprecated_terms": deprecated,
-            "retrieval_detail": str(retrieval_detail)[:500] if retrieval_detail else None,
+            "retrieval_detail": str(retrieval_detail) if retrieval_detail else None,
         })
 
     # ------------------------------------------------------------------
