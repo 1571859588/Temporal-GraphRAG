@@ -258,6 +258,8 @@ def create_temporal_graphrag_from_config(
         enable_community_summary=config.get('enable_community_summary', True),
         enable_incremental=config.get('enable_incremental', False),
         preserve_communities=config.get('preserve_communities', False),
+        best_model_max_token_size=config.get('best_model_max_token_size', 8192),
+        cheap_model_max_token_size=config.get('cheap_model_max_token_size', 8192),
     )
     
     return graph_rag

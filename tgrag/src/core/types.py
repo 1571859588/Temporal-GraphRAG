@@ -88,7 +88,7 @@ class QueryParam:
     seed_node_method: Literal["entities", "relations"] = "entities"
     
     # Naive search parameters
-    naive_max_token_for_text_unit: int = 12000
+    naive_max_token_for_text_unit: int = 7000
     
     # Local search parameters
     local_max_token_for_text_unit: int = 4000
@@ -101,7 +101,7 @@ class QueryParam:
     # Global search parameters
     global_min_community_rating: float = 0
     global_max_consider_community: float = 512
-    global_max_token_for_community_report: int = 16384
+    global_max_token_for_community_report: int = 7000
     global_special_community_map_llm_kwargs: dict = field(
         default_factory=lambda: {"response_format": {"type": "json_object"}}
     )

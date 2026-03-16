@@ -164,10 +164,10 @@ class TemporalGraphRAG:
     best_model_id: str = "us.anthropic.claude-3-sonnet-20240229-v1:0"
     cheap_model_id: str = "us.anthropic.claude-3-haiku-20240307-v1:0"
     best_model_func: callable = gpt_4o_mini_complete
-    best_model_max_token_size: int = 65536
+    best_model_max_token_size: int = 8192
     best_model_max_async: int = 32
     cheap_model_func: callable = gpt_4o_mini_complete
-    cheap_model_max_token_size: int = 32768
+    cheap_model_max_token_size: int = 8192
     cheap_model_max_async: int = 32
 
     # entity extraction
