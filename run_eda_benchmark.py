@@ -203,6 +203,26 @@ def main():
     log(f"\n[5] 运行 QA 查询 ({len(gt_qa_data.get('qa_pairs', []))} 个问题)...")
 
     qa_results = []
+    
+    # Pre-define result path for incremental saving
+    result_path = os.path.join(args.output_dir, f"tgrag_result_{timestamp}.json")
+    
+    def save_partial_results(results_list, ers_rationale=""):
+        output = {
+            "baseline": "TG-RAG (Temporal-GraphRAG)",
+            "timestamp": timestamp,
+            "config": {
+                "config_path": args.config,
+                "query_mode": args.query_mode,
+                "working_dir": graph_rag.working_dir,
+            },
+            "qa_results": results_list,
+            "ers_rationale": ers_rationale.strip(),
+            "gt_rationale_text": "\n".join(gt_rationale["rationales"]),
+        }
+        with open(result_path, "w", encoding="utf-8") as f:
+            json.dump(output, f, ensure_ascii=False, indent=2)
+
     appender = get_baseline_generation_append(args.domain) if 'get_baseline_generation_append' in globals() else ""
 
     for idx, qa in enumerate(gt_qa_data.get("qa_pairs", [])):
@@ -244,6 +264,9 @@ def main():
             "deprecated_terms": deprecated,
             "retrieval_detail": str(retrieval_detail) if retrieval_detail else None,
         })
+        
+        # Incremental save
+        save_partial_results(qa_results)
 
     # ------------------------------------------------------------------
     # 6. Generate evolution rationale via TG-RAG
@@ -267,26 +290,10 @@ def main():
         evo_rationale = f"[TG-RAG Error]: {e}"
 
     # ------------------------------------------------------------------
-    # 7. Save output JSON (compatible with eval pipeline)
+    # 7. Final Save
     # ------------------------------------------------------------------
-    log("\n[7] 保存结果...")
-
-    output = {
-        "baseline": "TG-RAG (Temporal-GraphRAG)",
-        "timestamp": timestamp,
-        "config": {
-            "config_path": args.config,
-            "query_mode": args.query_mode,
-            "working_dir": graph_rag.working_dir,
-        },
-        "qa_results": qa_results,
-        "ers_rationale": evo_rationale.strip(),
-        "gt_rationale_text": "\n".join(gt_rationale["rationales"]),
-    }
-
-    result_path = os.path.join(args.output_dir, f"tgrag_result_{timestamp}.json")
-    with open(result_path, "w", encoding="utf-8") as f:
-        json.dump(output, f, ensure_ascii=False, indent=2)
+    log("\n[7] 保存最终结果...")
+    save_partial_results(qa_results, evo_rationale)
 
     log(f"\n日志已保存: {log_path}")
     log(f"结果已保存: {result_path}")
