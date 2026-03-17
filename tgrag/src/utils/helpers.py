@@ -51,9 +51,11 @@ def load_json(file_name):
 
 
 def write_json(json_obj, file_name):
-    """Write JSON to file."""
-    with open(file_name, "w", encoding="utf-8") as f:
+    """Write JSON to file atomically."""
+    temp_file = f"{file_name}.tmp"
+    with open(temp_file, "w", encoding="utf-8") as f:
         json.dump(json_obj, f, indent=2, ensure_ascii=False)
+    os.replace(temp_file, file_name)
 
 
 def clean_str(input: any) -> str:

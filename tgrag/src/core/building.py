@@ -107,8 +107,10 @@ async def _handle_entity_relation_summary(
     if len(tokens) < summary_max_tokens:  # No need for summary
         return description
     prompt_template = PROMPTS["summarize_entity_descriptions"]
+    # Leave a safety margin of 500 tokens for the prompt itself
+    safe_max_tokens = max(100, llm_max_tokens - 500)
     use_description = decode_tokens_by_tiktoken(
-        tokens[:llm_max_tokens], model_name=tiktoken_model_name
+        tokens[:safe_max_tokens], model_name=tiktoken_model_name
     )
     context_base = dict(
         entity_name=entity_or_relation_name,
@@ -356,54 +358,63 @@ async def _handle_flexible_relationship_extraction(
         return None
     
     # Try to identify relationship patterns
-    first_attr = _sanitize_attribute(record_attributes[0]).lower()
-    if "relationship" in first_attr:
-        # Standard format: ("relationship", timestamp, source, target, description)
+    if not record_attributes or len(record_attributes) == 0:
+        return None
+    
+    first_attr_raw = record_attributes[0]
+    if first_attr_raw is None:
+        logger.debug(f"Relationship extraction failed: first attribute is None for {record_attributes}")
+        return None
+        
+    first_attr = _sanitize_attribute(first_attr_raw).lower()
+    
+    # Standard formats: ("relationship", timestamp, source, target, description) or ("event", timestamp, source, target, description)
+    if "relationship" in first_attr or "event" in first_attr:
         if len(record_attributes) >= 5:
             return await _handle_single_temporal_relationship_extraction(record_attributes, chunk_key)
-    
-    # Alternative format: ("relationship", source, target, description) - no timestamp
-    if "relationship" in _sanitize_attribute(record_attributes[0]).lower() and len(record_attributes) >= 4:
-        source = _sanitize_attribute(record_attributes[1].upper())
-        target = _sanitize_attribute(record_attributes[2].upper())
-        edge_description = _sanitize_attribute(record_attributes[3])
         
-        # Try to extract timestamp from description or use a default
-        timestamp = "UNKNOWN_TIME"
-        try:
-            # Look for timestamp patterns in description
-            timestamp_patterns = [
-                r'\b(20\d{2})[-\s]?(Q[1-4])\b',  # 2023-Q2
-                r'\b(20\d{2})[-\s]?(\d{1,2})\b',  # 2023-06
-                r'\b(Q[1-4])\s+(20\d{2})\b',      # Q2 2023
-            ]
+        # Alternative format: ("relationship"/"event", source, target, description) - no timestamp
+        if len(record_attributes) >= 4:
+            source = _sanitize_attribute(record_attributes[1].upper())
+            target = _sanitize_attribute(record_attributes[2].upper())
+            edge_description = _sanitize_attribute(record_attributes[3])
             
-            for pattern in timestamp_patterns:
-                match = re.search(pattern, edge_description, re.IGNORECASE)
-                if match:
-                    if 'Q' in match.group():
-                        timestamp = f"{match.group(1)}-{match.group(2)}"
-                    else:
-                        timestamp = f"{match.group(1)}-{match.group(2).zfill(2)}"
-                    break
-        except:
-            pass
-        
-        description = {timestamp: edge_description}
-        edge_source_id = {timestamp: chunk_key}
-        temporal_level = {timestamp: 1}  # Default level
-        
-        return dict(
-            timestamp=timestamp,
-            temporal_level=temporal_level,
-            src_id=source,
-            tgt_id=target,
-            description=description,
-            source_id=edge_source_id,
-        )
+            # Try to extract timestamp from description or use a default
+            timestamp = "UNKNOWN_TIME"
+            try:
+                # Look for timestamp patterns in description
+                timestamp_patterns = [
+                    r'\b(20\d{2})[-\s]?(Q[1-4])\b',  # 2023-Q2
+                    r'\b(20\d{2})[-\s]?(\d{1,2})\b',  # 2023-06
+                    r'\b(Q[1-4])\s+(20\d{2})\b',      # Q2 2023
+                ]
+                
+                for pattern in timestamp_patterns:
+                    match = re.search(pattern, edge_description, re.IGNORECASE)
+                    if match:
+                        if 'Q' in match.group():
+                            timestamp = f"{match.group(1)}-{match.group(2)}"
+                        else:
+                            timestamp = f"{match.group(1)}-{match.group(2).zfill(2)}"
+                        break
+            except:
+                pass
+            
+            description = {timestamp: edge_description}
+            edge_source_id = {timestamp: chunk_key}
+            temporal_level = {timestamp: 1}  # Default level
+            
+            return dict(
+                timestamp=timestamp,
+                temporal_level=temporal_level,
+                src_id=source,
+                tgt_id=target,
+                description=description,
+                source_id=edge_source_id,
+            )
     
     # Entity-entity relationship without explicit relationship marker
-    if len(record_attributes) >= 3 and "entity" not in _sanitize_attribute(record_attributes[0]).lower():
+    if len(record_attributes) >= 3 and "entity" not in first_attr:
         # Might be a relationship in disguise
         source = _sanitize_attribute(record_attributes[0].upper())
         target = _sanitize_attribute(record_attributes[1].upper())
@@ -559,9 +570,14 @@ async def _merge_temporal_edges_then_upsert(
     if await knwoledge_graph_inst.has_edge(src_id, tgt_id):
         src_data = await knwoledge_graph_inst.get_node(src_id)
         tgt_data = await knwoledge_graph_inst.get_node(tgt_id)
-        if src_data.get('entity_type').lower() in PROMPTS['DEFAULT_TEMPORAL_HIERARCHY'] or tgt_data.get(
-                'entity_type').lower() in PROMPTS['DEFAULT_TEMPORAL_HIERARCHY']:
-            logger.info(f"Skipping temporal edge {src_id} -> {tgt_id} (temporal entities: {src_data.get('entity_type')}, {tgt_data.get('entity_type')})")
+        
+        # Robust checks for entity types
+        src_type = src_data.get('entity_type') if src_data else None
+        tgt_type = tgt_data.get('entity_type') if tgt_data else None
+        
+        if (src_type and _sanitize_attribute(src_type).lower() in PROMPTS['DEFAULT_TEMPORAL_HIERARCHY']) or \
+           (tgt_type and _sanitize_attribute(tgt_type).lower() in PROMPTS['DEFAULT_TEMPORAL_HIERARCHY']):
+            logger.info(f"Skipping temporal edge {src_id} -> {tgt_id} (temporal entities: {src_type}, {tgt_type})")
             return
         already_edge = await knwoledge_graph_inst.get_edge(src_id, tgt_id)
         already_source_ids = already_edge['source_id']

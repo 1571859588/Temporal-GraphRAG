@@ -15,7 +15,7 @@ building:
   provider: "openai"              # Uses OpenAI-compatible API (vLLM / Ollama / etc.)
   model: "Qwen3-30B-A3B-Instruct-2507"  # Overridden by TGRAG_MODEL env if set
   best_model_max_token_size: 8192
-  cheap_model_max_token_size: 7000  # Added safety margin
+  cheap_model_max_token_size: 8192
 
   embedding_provider: "openai"    # Embedding via OpenAI-compatible /v1/embeddings
 

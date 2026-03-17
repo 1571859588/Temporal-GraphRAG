@@ -61,10 +61,25 @@ async def openai_embedding(
     from openai import AsyncOpenAI
     openai_client = AsyncOpenAI(api_key=api_key, base_url=base_url)
 
+    # Implement truncation to respect max_token_size
+    # Note: vLLM usually has a per-request limit. Here we truncate individual texts.
+    max_tokens = int(os.getenv('OPENAI_EMBEDDING_MAX_TOKENS', '2048'))
+    from ..utils.helpers import encode_string_by_tiktoken, decode_tokens_by_tiktoken
+    
+    truncated_texts = []
+    tiktoken_model_name = os.getenv('TIKTOKEN_MODEL_NAME', 'gpt-4o')
+    
+    for text in texts:
+        tokens = encode_string_by_tiktoken(text, model_name=tiktoken_model_name)
+        if len(tokens) > max_tokens:
+            logger.warning(f"Truncating text from {len(tokens)} to {max_tokens} tokens for embedding")
+            text = decode_tokens_by_tiktoken(tokens[:max_tokens], model_name=tiktoken_model_name)
+        truncated_texts.append(text)
+
     response = await openai_client.embeddings.create(
-        model=embedding_model, input=texts, encoding_format="float"
+        model=embedding_model, input=truncated_texts, encoding_format="float"
     )
-    print(f"DEBUG Response: {response}")
+    # print(f"DEBUG Response: {response}")
     return np.array([dp.embedding for dp in response.data])
 
 

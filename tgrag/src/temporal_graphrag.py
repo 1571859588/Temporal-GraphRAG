@@ -47,6 +47,7 @@ from .storage import (
 from .utils.hashing import compute_mdhash_id
 from .utils.async_utils import limit_async_func_call, always_get_an_event_loop
 from .utils.json_utils import convert_response_to_json
+from .utils.query_logger import QueryLogger
 from .utils import logger
 
 # Import from new structure
@@ -248,6 +249,8 @@ class TemporalGraphRAG:
         self.embedding_func = limit_async_func_call(self.embedding_func_max_async)(
             self.embedding_func
         )
+        
+        self.query_logger = QueryLogger(self.working_dir)
         self.entities_vdb = (
             self.vector_db_storage_cls(
                 namespace="entities",
@@ -357,6 +360,7 @@ class TemporalGraphRAG:
                 global_config_dict,
             )
             await self._query_done()
+            self.query_logger.log(query, str(response), retrieval_detail, mode="local")
             return response, retrieval_detail
         elif param.mode == "global":
             response = await global_query(
@@ -381,6 +385,7 @@ class TemporalGraphRAG:
         else:
             raise ValueError(f"Unknown mode {param.mode}")
         await self._query_done()
+        self.query_logger.log(query, str(response), mode=param.mode)
         return response
 
     async def ainsert(self, dict_or_dicts):

@@ -2134,10 +2134,34 @@ async def _build_local_query_context(
         f"For query: {query}, Using {len(node_datas)} entities, {len(use_communities)} communities, {len(use_relations)} relations, {len(use_text_units)} text units"
     )
     retrieval_details = {
-        "entity": len(node_datas),
-        "relation": len(use_relations),
-        "community": len(use_communities),
-        "text_units": len(use_text_units),
+        "entities": [
+            {
+                "name": n.get("entity_name", "UNKNOWN"),
+                "description": n.get("description", ""),
+                "type": n.get("entity_type", ""),
+                "source_id": n.get("source_id", "")
+            }
+            for n in node_datas
+        ],
+        "relations": [
+            {
+                "src": r.get("src_tgt", ["UNKNOWN", "UNKNOWN"])[0],
+                "tgt": r.get("src_tgt", ["UNKNOWN", "UNKNOWN"])[1],
+                "description": r.get("description", ""),
+                "weight": r.get("weight", 0),
+                "source_id": r.get("source_id", "")
+            }
+            for r in use_relations
+        ],
+        "community": len(use_communities), # Keep as count for now or extend if needed
+        "text_units": [
+            {
+                "id": c.get("id", ""),
+                "content": c.get("content", "")[:200] + "..." if len(c.get("content", "")) > 200 else c.get("content", ""),
+                "full_doc_id": c.get("full_doc_id", "")
+            }
+            for c in use_text_units
+        ],
         "total_evidence": len(node_datas) + len(use_relations) + len(use_communities) + len(use_text_units)
     }
     
